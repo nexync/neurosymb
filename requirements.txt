@@ -1,0 +1,4 @@
+python=3.10
+pytorch=1.13
+graphviz=2.50
+pygraphviz=1.9
