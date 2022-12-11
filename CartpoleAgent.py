@@ -7,7 +7,7 @@ import collections
 import math
 
 Observation = collections.namedtuple("Observation", ("Position", "Velocity", "Angle", "AngVelocity"))
-
+Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
 class LNNCartpole():
   def __init__(self, n_pos, n_vel, n_ang, n_angvel, num_nodes):
     def create_predicates(n_nodes, name):
@@ -96,5 +96,14 @@ class FOLCartpoleAgent():
   def optimize(self):
     if len(self.replay_memory) < self.MIN_REPLAY_SIZE:
       return
-      
+
+    transitions = [self.replay_memory[idx] for idx in np.random.permutation(len(self.replay_memory))[:self.MINIBATCH_SIZE]]
+    batch = Transition(*zip(*transitions))
+
+    batch.state
+
+    action_batch = torch.tensor(batch.action, device = self.device, dtype = torch.int64)
+    reward_batch = torch.tensor(batch.reward, device = self.device)
+
+
       
