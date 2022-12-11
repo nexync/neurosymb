@@ -133,6 +133,8 @@ class FOLCartpoleAgent():
 		#next_state_values[final_mask] = #take max between forward of left and right lnn
 
 		expected_next_state_values = next_state_values * self.GAMMA + reward_batch
+
+		##UPDATE STUFF HERE
 		
 
 	def sample_random_action(self):
