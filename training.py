@@ -6,7 +6,6 @@ import numpy as np
 import collections
 import math
 import tqdm
-import copy
 
 from CartpoleAgent import FOLCartpoleAgent
 

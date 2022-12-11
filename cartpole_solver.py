@@ -24,18 +24,17 @@ class DQN(nn.Module):
         return x
 
 class DQNSolver:
-    GAMMA = 0.99
+    GAMMA = 0.9
     BATCH_SIZE = 64
-    REPLAY_MEMORY = 10000
+    REPLAY_MEMORY = 10_000
     MIN_REPLAY_MEMORY = 1000
-    Gamma = 0.9
     def __init__(self, n_inputs, n_outputs):
       self.device = "cuda:0" if torch.cuda.is_available() else 'cpu'
       self.dqn = DQN(n_inputs, n_outputs).to(self.device)
       self.criterion  = torch.nn.MSELoss()
       self.num_actions = n_outputs
       self.opt = torch.optim.Adam(self.dqn.parameters(), lr = 0.01)
-      self.replay_memory = collections.deque([], maxlen = 100000)
+      self.replay_memory = collections.deque([], maxlen = self.REPLAY_MEMORY)
   
     def choose_action(self, state, epsilon):
         if (np.random.random() <= epsilon):
@@ -61,7 +60,7 @@ class DQNSolver:
             y = self.dqn(state)
             y_target = y.clone().detach()
             with torch.no_grad():
-                y_target[0][action] = reward if done else reward + self.Gamma * torch.max(self.dqn(next_state)[0])
+                y_target[0][action] = reward if done else reward + self.GAMMA * torch.max(self.dqn(next_state)[0])
             y_batch.append(y[0])
             y_target_batch.append(y_target[0])
         

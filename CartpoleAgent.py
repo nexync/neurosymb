@@ -143,9 +143,5 @@ class FOLCartpoleAgent():
 		
 		self.right_lnn.forward(state_fol)
 		self.left_lnn.forward(state_fol)
-        
-            
-        
-        
             
 
