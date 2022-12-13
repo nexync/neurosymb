@@ -10,53 +10,57 @@ Observation = collections.namedtuple("Observation", ("Position", "Velocity", "An
 Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
 
 class LNNCartpole():
-    def __init__(self, num_nodes, n_pos, n_vel, n_ang, n_angvel):
-        def create_predicates(n_nodes, name):
-            predicate_list = []
-            for i in range(n_nodes):
-                predicate_list.append(Predicate(name + str(i+1)))
-                predicate_list.append(Predicate(name + str(-(i+1))))
-            return predicate_list
+	def __init__(self, num_nodes, n_pos, n_vel, n_ang, n_angvel):
+		def create_predicates(n_nodes, name, var):
+			predicate_list = []
+			for i in range(n_nodes):
+				predicate_list.append(Predicate(name + str(i+1))(var))
+				predicate_list.append(Predicate(name + str(-(i+1)))(var))
+			return predicate_list
 
-        def create_n_ary_and(num_nodes, preds):
-            and_list = []
-            for _ in range(num_nodes):
-                and_list.append(And(*preds["Position"], *preds["Velocity"], *preds["Angle"], *preds["AngVelocity"]))
-            return and_list
+		def create_n_ary_and(num_nodes, preds):
+			and_list = []
+			for _ in range(num_nodes):
+				and_list.append(And(*preds["Position"], *preds["Velocity"], *preds["Angle"], *preds["AngVelocity"]))
+			return and_list
 
-        def create_n_ary_or(and_list):
-            return Or(*and_list)
+		def create_n_ary_or(and_list):
+			return Or(*and_list)
 
-        self.model = Model()
-        self.preds = {
-          "Position": create_predicates(n_pos, "pos"),
-          "Velocity": create_predicates(n_vel, "vel"),
-          "Angle": create_predicates(n_ang, "ang"),
-          "AngVelocity": create_predicates(n_angvel, "angvel")
-        }
-        self.and_nodes = create_n_ary_and(num_nodes, self.preds)
-        self.or_node = create_n_ary_or(self.and_nodes)
+		self.model = Model()
+		x = Variable('x')
+		self.preds = {
+			"Position": create_predicates(n_pos, "pos", x),
+			"Velocity": create_predicates(n_vel, "vel", x),
+			"Angle": create_predicates(n_ang, "ang", x),
+			"AngVelocity": create_predicates(n_angvel, "angvel", x)
+		}
+		self.and_nodes = create_n_ary_and(num_nodes, self.preds)
+		self.or_node = create_n_ary_or(self.and_nodes)
 
-        self.model.add_knowledge(*self.and_nodes, self.or_node)
-    def generate_state_dictionary(self, processed_fol):
-        d = []
-        for key in self.preds:
-            arr = [{0: Fact.FALSE}]*(len(self.preds[key])*2)
+		self.model.add_knowledge(*self.and_nodes, self.or_node)
 
-            positive, value = processed_fol[key]
+	def generate_state_dictionary(self, processed_fol_arr):
+		d = []
+		for key in self.preds:
+			arr = [{}]*len(self.preds[key])
+			for i, fol in enumerate(processed_fol_arr):
+				positive, value = fol[key]
+				index = 2*(value-1) if positive else 2*value-1
+				for j in len(self.preds[key]):
+					if j == index:
+						arr[j][str(i)] = Fact.TRUE
+					else:
+						arr[j][str(i)] = Fact.FALSE
+			d.append(dict(zip(self.preds[key], arr)))
+		res = {**d[0], **d[1], **d[2], **d[3]}
+		return res
 
-            index = 2*(value-1) if positive else 2*value-1
-            arr[index][0] = Fact.TRUE
-            d.append(dict(zip(self.preds[key], arr)))
-        res = {**d[0], **d[1], **d[2], **d[3]}
-        return res
-    
-    def forward(self, processed_fol_arr):
-        for fol in processed_fol_arr:
-            state_dict = self.generate_state_dictionary(fol)
-            
-            # DETERMINE HOW MODEL PROCESSES FORWARD
-            # self.model.add_data(state_dict)
+	def forward(self, processed_fol_arr):
+		state_dict = self.generate_state_dictionary(processed_fol_arr)
+		
+		# DETERMINE HOW MODEL PROCESSES FORWARD
+		# self.model.add_data(state_dict)
 
 class FOLCartpoleAgent():
 	MAXLEN = 10_000
