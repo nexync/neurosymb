@@ -43,6 +43,10 @@ class LNNCartpole():
 		self.left = left
 
 	def generate_state_dictionary(self, processed_fol_arr):
+		'''
+			params: processed_fol_arr - array of dictionaries that determine which bins should be evaluated to true on initial downward pass
+			returns: dictionary that can be directly inputted into lnn for training/inference
+		'''
 		d = []
 		for key in self.preds:
 			value_array = []
