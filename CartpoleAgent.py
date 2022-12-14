@@ -6,6 +6,8 @@ import torch.nn.functional as F
 import collections
 import math
 
+#MATTHEW BRANCH HERE
+
 Observation = collections.namedtuple("Observation", ("Position", "Velocity", "Angle", "AngVelocity"))
 Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
 
