@@ -168,7 +168,6 @@ class FOLCartpoleAgent():
         transitions = [self.replay_memory[idx] for idx in np.random.permutation(len(self.replay_memory))[:self.MINIBATCH_SIZE]]
         batch = Transition(*zip(*transitions))
 
-        #action_batch = torch.tensor(batch.action, device = self.device, dtype = torch.int64)
         reward_batch = torch.tensor(batch.reward, device = self.device)
 
         final_mask = torch.tensor([val == False for val in batch.done], device = self.device)		
@@ -179,7 +178,7 @@ class FOLCartpoleAgent():
         left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
 
         next_state_values = torch.zeros(self.MINIBATCH_SIZE, device = self.device)
-        next_state_values[final_mask] = torch.cat((right_next_values, left_next_values), dim=1).max(dim=1)
+        next_state_values[final_mask] = torch.stack((right_next_values, left_next_values), dim=1).max(dim=1).values
 
         expected_next_state_values = next_state_values * self.GAMMA + reward_batch
 
