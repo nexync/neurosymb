@@ -56,11 +56,51 @@ class LNNCartpole():
 		res = {**d[0], **d[1], **d[2], **d[3]}
 		return res
 
+	def generate_label_dictionary(self, qval_arr, err=0.1):
+		'''
+			params:
+				qval_arr: array of qvals for training
+				err: float error radius on truth bounds
+
+			returns:
+				label_dict: dictionary {str(i): (qval-err, qval+err)} for each qval in qval_arr
+		'''
+		label_dict = {self.or_node: {str(i): (max(qval-err, 0.), min(qval+err, 1.)) for i, qval in enumerate(qval_arr)}}
+		return label_dict
+
 	def forward(self, processed_fol_arr):
+		'''
+			params:
+				processed_fol_arr: array of fol observations used to generate state dict
+			
+			returns:
+				output: bsz x 2 tensor of lower/upper bounds for each batch example
+		'''
+		self.model.flush()
 		state_dict = self.generate_state_dictionary(processed_fol_arr)
+		self.model.add_data(state_dict)
+		self.model.infer()
+		return self.or_node.get_data()
 		
-		# DETERMINE HOW MODEL PROCESSES FORWARD
-		# self.model.add_data(state_dict)
+	def train_step(self, obs, labels, steps=1):
+		'''
+			params:
+				obs: array of dictionaries corresponding to first order logic of input nodes
+				labels: array of floats corresponding to the labels of observations
+
+			returns:
+				loss: loss over training	
+		'''
+		assert len(obs) == labels.shape(0)
+		
+		self.model.flush()
+		
+		state_dict = self.generate_state_dictionary(obs)
+		self.model.add_data(state_dict)
+		label_dict = self.generate_label_dictionary(labels)
+		self.model.add_labels(label_dict)
+		epochs, loss = self.model.train(losses=Loss.SUPERVISED, epochs=steps)
+		return loss
 
 class FOLCartpoleAgent():
 	MAXLEN = 10_000
@@ -86,7 +126,7 @@ class FOLCartpoleAgent():
 			ret.append(self.env2fol(obs))
 		return ret
 
-	def env2fol(self, obs):
+	def env2fol(self, obs, right=True):
 		assert obs.shape == (4,)
 		obs = Observation(*obs)
 		ret = {}
@@ -95,14 +135,17 @@ class FOLCartpoleAgent():
 			positive = (val >= 0)
 			if positive:
 				val_bin = math.ceil(val/self.bin_sizes[key])
-			if val/self.bin_sizes[key] - int(val/self.bin_sizes[key]) == 0:
-				val_bin += 1
+				if val/self.bin_sizes[key] - int(val/self.bin_sizes[key]) == 0:
+					val_bin += 1
 				val_bin = min(val_bin, self.bin_args[key])
 			else:
 				val_bin = math.floor(val/self.bin_sizes[key])
 				val_bin = max(val_bin, -self.bin_args[key])
 
-			ret[key] = (positive, abs(val_bin))
+			if right:
+				ret[key] = (positive, abs(val_bin))
+			else:
+				ret[key] = (not(positive), abs(val_bin))
 		return ret
 
 	def remember(self, obs):
@@ -118,34 +161,43 @@ class FOLCartpoleAgent():
 		transitions = [self.replay_memory[idx] for idx in np.random.permutation(len(self.replay_memory))[:self.MINIBATCH_SIZE]]
 		batch = Transition(*zip(*transitions))
 
-		state_batch = self.envs2fol(np.array(batch.state))
-
-		action_batch = torch.tensor(batch.action, device = self.device, dtype = torch.int64)
+		#action_batch = torch.tensor(batch.action, device = self.device, dtype = torch.int64)
 		reward_batch = torch.tensor(batch.reward, device = self.device)
 		
-		self.right_lnn.forward(state_batch)
-		self.left_lnn.forward(state_batch)
-		
-		final_mask = torch.tensor([val == False for val in batch.done], device = self.device)
+		final_mask = torch.tensor([val == False for val in batch.done], device = self.device)		
+
 		next_state_batch = self.envs2fol(np.array(batch.next_state)[final_mask])
 		
-		self.right_lnn.forward(next_state_batch)
-		self.left_lnn.forward(next_state_batch)
-
-
+		right_next_values = self.right_lnn.forward(next_state_batch).mean(dim=1)
+		left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
+		
 		next_state_values = torch.zeros(self.MINIBATCH_SIZE, device = self.device)
-		#next_state_values[final_mask] = #take max between forward of left and right lnn
+		next_state_values[final_mask] = torch.cat((right_next_values, left_next_values), dim=1).max(dim=1)
 
 		expected_next_state_values = next_state_values * self.GAMMA + reward_batch
-		
+
+		left_mask = torch.tensor([val == 0 for val in batch.action], device = self.device) #True is left, False is Right
+		right_mask = left_mask == False
+
+		state_batch_right = self.envs2fol(np.array(batch.state)[right_mask], right=True)
+		state_batch_left = self.envs2fol(np.array(batch.state)[left_mask], right=False)
+
+		loss_left = self.left_lnn.train_step(state_batch_left, expected_next_state_values[left_mask])
+		loss_right = self.right_lnn.train_step(state_batch_right, expected_next_state_values[right_mask])
+
+		return loss_left + loss_right
+
 
 	def sample_random_action(self):
+		'''
+			0: left
+			1: right
+		'''
 		return np.random.randint(2)
 
 	def get_action(self, state):
 		state_fol = [self.env2fol(state)]
-		
-		self.right_lnn.forward(state_fol)
-		self.left_lnn.forward(state_fol)
+		return torch.argmax(self.left_lnn.forward(state_fol).mean(dim=1), self.right_lnn.forward(state_fol).mean(dim=1))
+
             
 
