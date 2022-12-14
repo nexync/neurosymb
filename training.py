@@ -46,7 +46,7 @@ def train():
             if np.random.random() > epsilon:
                 action = agent.sample_random_action()
             else:
-                action = agent.sample_random_action() #agent.get_action(state)
+                action = agent.get_action(state)
             next_state, reward, terminal, truncated, info = env.step(action)
             reward = reward if not terminal else 0
             agent.remember(Transition(state, action, next_state, reward, terminal))
