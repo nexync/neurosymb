@@ -48,7 +48,7 @@ def train():
             else:
                 action = agent.get_action(state)
             next_state, reward, terminal, truncated, info = env.step(action)
-            reward = reward if not terminal else 0
+            reward = reward/10 if not terminal else 0
             agent.remember(Transition(state, action, next_state, reward, terminal))
             loss = agent.optimize()
             state = next_state
