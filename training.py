@@ -7,7 +7,7 @@ import collections
 import math
 import tqdm
 
-from CartpoleAgent import FOLCartpoleAgent
+from CartpoleAgentOld import FOLCartpoleAgent
 
 Observation = collections.namedtuple("Observation", ("Position", "Velocity", "Angle", "AngVelocity"))
 Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
