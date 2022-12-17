@@ -118,7 +118,7 @@ class LNNCartpole():
       returns:
         loss: loss over training	
     '''
-    assert len(obs) == labels.shape(0)
+    assert len(obs) == labels.shape[0]
 
     self.model.flush()
 
@@ -127,7 +127,6 @@ class LNNCartpole():
     label_dict = self.generate_label_dictionary(labels)
     self.model.add_labels(label_dict)
     
-    #ADD info about lr, optimizer here - define above and input here, we might need to write lr schedulers
     epochs, loss = self.model.train(losses=[Loss.SUPERVISED], learning_rate = lr, epochs=steps)
     return loss
 
@@ -136,7 +135,7 @@ class FOLCartpoleAgent():
   MIN_REPLAY_SIZE = 1_000
   BATCH_SIZE = 4
   GAMMA = 0.9
-  LR = 0.01
+  LR = 0.001
 
   def __init__(self, n_bin_args, n_nodes, limits):
     # self.left_lnn = LNNCartpole(n_nodes, **n_bin_args, left = True)
@@ -210,7 +209,7 @@ class FOLCartpoleAgent():
       next_values = self.lnn.forward(next_state_batch).mean(dim=1)
 
       next_state_values = torch.zeros(self.BATCH_SIZE)
-      next_state_values[final_mask] = next_values
+      next_state_values[final_mask] = next_values[:final_mask.sum().item()]
 
       # right_next_values = self.right_lnn.forward(next_state_batch).mean(dim=1)
       # left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)

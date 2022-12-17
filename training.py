@@ -54,7 +54,7 @@ def train():
             state = next_state
 
             if loss is not None:
-                total_loss += loss
+                total_loss += loss[0]
                 step += 1
             
             if terminal or truncated:
