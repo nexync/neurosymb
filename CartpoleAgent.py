@@ -109,7 +109,7 @@ class LNNCartpole():
     self.model.infer()
     return self.or_node.get_data()
 
-  def train_step(self, obs, labels, steps=1):
+  def train_step(self, obs, labels, lr, steps=1):
     '''
       params:
         obs: array of dictionaries corresponding to first order logic of input nodes
@@ -128,13 +128,13 @@ class LNNCartpole():
     self.model.add_labels(label_dict)
     
     #ADD info about lr, optimizer here - define above and input here, we might need to write lr schedulers
-    epochs, loss = self.model.train(losses=[Loss.SUPERVISED], epochs=steps)
+    epochs, loss = self.model.train(losses=[Loss.SUPERVISED], learning_rate = lr, epochs=steps)
     return loss
 
 class FOLCartpoleAgent():
   MAXLEN = 10_000
   MIN_REPLAY_SIZE = 1_000
-  BATCH_SIZE = 64
+  BATCH_SIZE = 4
   GAMMA = 0.9
   LR = 0.01
 
@@ -192,34 +192,39 @@ class FOLCartpoleAgent():
 
 
     #Randomly samples from memory buffer and transforms into namedtuple
-    transitions = [self.replay_memory[idx] for idx in np.random.permutation(len(self.replay_memory))[:self.MINIBATCH_SIZE]]
+    transitions = [self.replay_memory[idx] for idx in np.random.permutation(len(self.replay_memory))[:self.BATCH_SIZE]]
     batch = Transition(*zip(*transitions))
 
     #Mask to separate inputs when calculating state_values (direction masks) and next_state_values (final mask)
-    final_mask = torch.tensor([val == False for val in batch.done], device = self.device)
+    final_mask = torch.tensor([val == False for val in batch.done])
     
     
     # left_mask = torch.tensor([val == 0 for val in batch.action], device = self.device) #True is left, False is Right
     # right_mask = left_mask == False		
 
     #perform next_state_calculations and fill expected values tensor
-    next_state_batch = self.envs2fol(np.array(batch.next_state)[final_mask])
 
-    next_values = self.lnn.forward(next_state_batch).mean(dim=1)
+    if final_mask.sum().item() > 0:
+      next_state_batch = self.envs2fol(np.array(batch.next_state)[final_mask])
 
-    next_state_values = torch.zeros(self.MINIBATCH_SIZE, device = self.device)
-    next_state_values[final_mask] = next_values.detach()
+      next_values = self.lnn.forward(next_state_batch).mean(dim=1)
 
-    # right_next_values = self.right_lnn.forward(next_state_batch).mean(dim=1)
-    # left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
-    ##next_state_values[final_mask] = torch.stack((right_next_values, left_next_values), dim=1).max(dim=1).values
+      next_state_values = torch.zeros(self.BATCH_SIZE)
+      next_state_values[final_mask] = next_values
 
-    reward_batch = torch.tensor(batch.reward, device = self.device)
-    expected_next_state_values = next_state_values * self.GAMMA + reward_batch
+      # right_next_values = self.right_lnn.forward(next_state_batch).mean(dim=1)
+      # left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
+      ##next_state_values[final_mask] = torch.stack((right_next_values, left_next_values), dim=1).max(dim=1).values
+
+      reward_batch = torch.tensor(batch.reward)
+      expected_next_state_values = next_state_values * self.GAMMA + reward_batch
+    
+    else:
+      expected_next_state_values = reward_batch
 
     #perform state_calculations to derive loss from current state -> expected values
     state_batch = self.envs2fol(batch.state)
-    loss = self.lnn.train_step(state_batch, expected_next_state_values)
+    loss = self.lnn.train_step(state_batch, expected_next_state_values, lr = self.LR, steps = 1)
 
     return loss
 
@@ -239,7 +244,7 @@ class FOLCartpoleAgent():
 
   def get_action(self, state):
     state_fol = [self.env2fol(state)]
-    val = self.lnn.forward(state_fol).mean(dim=1)
+    val = self.lnn.forward(state_fol).mean(dim=1)[0]
     if val > 0.5:
       return 1
     else:
