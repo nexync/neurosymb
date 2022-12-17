@@ -308,6 +308,7 @@ class FOLCartpoleAgent():
 				left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
 				next_state_values[final_mask] = torch.stack((right_next_values[final_mask.sum().item()], left_next_values[final_mask.sum().item()]), dim=1).max(dim=1).values
 			else:
+				next_values = self.lnn.forward(next_state_batch).mean(dim=1)
 				next_state_values[final_mask] = next_values[:final_mask.sum().item()]
 			
 			expected_next_state_values = next_state_values * self.GAMMA + reward_batch
