@@ -14,14 +14,14 @@ Transition = collections.namedtuple("Transition", ("state", "action", "next_stat
 
 EPSILON_START = 1.0
 EPSILON_END = 0.1
-WARMUP_EPISODES = 500
-NUM_EPISODES = 10_000
+WARMUP_EPISODES = 250
+NUM_EPISODES = 500
 
 n_bin_args = {
     "n_pos": 10,
-    "n_vel": 10,
+    "n_vel": 5,
     "n_ang": 10,
-    "n_angvel": 10
+    "n_angvel": 5
 }
 
 limits = {
@@ -31,12 +31,11 @@ limits = {
     "AngVelocity": [-3, 3]
 }
 
-agent = FOLCartpoleAgent(n_bin_args, n_nodes = 10, limits = limits)
+agent = FOLCartpoleAgent(n_bin_args, n_nodes = 10, limits = limits, type = "double")
 env = gym.make("CartPole-v1")
 
 def train():
     epsilon = EPSILON_START
-    episode_num = 0
     episode_runs = []
     episode_losses = []
     for episode in tqdm.tqdm(range(NUM_EPISODES)):

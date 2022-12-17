@@ -234,7 +234,8 @@ class FOLCartpoleAgent():
 	GAMMA = 0.9
 	LR = 0.001
 
-	def __init__(self, n_bin_args, n_nodes, limits, type = "double"):
+	def __init__(self, n_bin_args, n_nodes, limits, type):
+		assert type in ["single", "double"]
 		if type == "double":
 			self.left_lnn = LNNCartpoleDual(n_nodes, **n_bin_args, direction = "left")
 			self.right_lnn = LNNCartpoleDual(n_nodes, **n_bin_args, direction = "right")
