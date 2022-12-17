@@ -14,7 +14,6 @@ Transition = collections.namedtuple("Transition", ("state", "action", "next_stat
 class LNNCartpole():
   def __init__(self, num_nodes, n_pos, n_vel, n_ang, n_angvel):#, left):
 
-    ##FIX HERE TO GENERATE NEGATIVE NODES
     def create_predicates(n_nodes, name, var):
       predicate_list = []
       for i in range(n_nodes):
@@ -66,7 +65,7 @@ class LNNCartpole():
         #   positive = not(positive)
         index = 2*(value-1) if positive else 2*value-1
         index *= 2
-        for j in range(len(self.preds[key])/2):
+        for j in range(len(self.preds[key])//2):
           if len(value_array) <= 2*j:
             value_array.append({})
             value_array.append({})
