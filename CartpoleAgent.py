@@ -16,7 +16,7 @@ class LNNCartpoleDual():
 			for i in range(n_nodes):
 				#Creates Predicates for buckets corresponding to values
 				predicate_list.append(Predicate(name + str(i+1))(var))
-				predicate_list.append(Predicate(name + str-(i+1))(var))
+				predicate_list.append(Predicate(name + str(-(i+1)))(var))
 			return predicate_list
 
 		def create_n_ary_and(num_nodes, preds):
@@ -133,8 +133,8 @@ class LNNCartpole():
 				#Creates Predicates for buckets corresponding to values
 				predicate_list.append(Predicate(name + str(i+1))(var))
 				predicate_list.append(Predicate('not'+name + str(i+1))(var))
-				predicate_list.append(Predicate(name + str-(i+1))(var))
-				predicate_list.append(Predicate('not'+name + str-(i+1))(var))
+				predicate_list.append(Predicate(name + str(-(i+1)))(var))
+				predicate_list.append(Predicate('not'+name + str(-(i+1)))(var))
 			return predicate_list
 
 		def create_n_ary_and(num_nodes, preds):
@@ -232,11 +232,11 @@ class FOLCartpoleAgent():
 	MIN_REPLAY_SIZE = 1_000
 	BATCH_SIZE = 4
 	GAMMA = 0.9
-	LR = 0.001
+	LR = 0.05
 
-	def __init__(self, n_bin_args, n_nodes, limits, type):
-		assert type in ["single", "double"]
-		if type == "double":
+	def __init__(self, n_bin_args, n_nodes, limits, t):
+		assert t in ["single", "double"]
+		if t == "double":
 			self.left_lnn = LNNCartpoleDual(n_nodes, **n_bin_args, direction = "left")
 			self.right_lnn = LNNCartpoleDual(n_nodes, **n_bin_args, direction = "right")
 		else:
@@ -248,7 +248,7 @@ class FOLCartpoleAgent():
 			self.bin_sizes[key1] = self.limits[key1][1]/self.bin_args[key2]
 
 		self.replay_memory = collections.deque([], maxlen = self.MAXLEN)
-		self.type = type
+		self.type = t
 	
 	def envs2fol(self, obs_arr):
 		ret = []
@@ -296,18 +296,17 @@ class FOLCartpoleAgent():
 		final_mask = torch.tensor([val == False for val in batch.done])
 		reward_batch = torch.tensor(batch.reward)
 
-
 		if final_mask.sum().item() > 0:
 			next_state_batch = self.envs2fol(np.array(batch.next_state)[final_mask])
 			next_state_values = torch.zeros(self.BATCH_SIZE)
 
 			if self.type == "double":
-				left_mask = torch.tensor([val == 0 for val in batch.action], device = self.device) #True is left, False is Right
+				left_mask = torch.tensor([val == 0 for val in batch.action]) #True is left, False is Right
 				right_mask = left_mask == False	
 
 				right_next_values = self.right_lnn.forward(next_state_batch).mean(dim=1)
 				left_next_values = self.left_lnn.forward(next_state_batch).mean(dim=1)
-				next_state_values[final_mask] = torch.stack((right_next_values[final_mask.sum().item()], left_next_values[final_mask.sum().item()]), dim=1).max(dim=1).values
+				next_state_values[final_mask] = torch.stack((right_next_values[:final_mask.sum().item()], left_next_values[:final_mask.sum().item()]), dim=1).max(dim=1).values.squeeze(0)
 			else:
 				next_values = self.lnn.forward(next_state_batch).mean(dim=1)
 				next_state_values[final_mask] = next_values[:final_mask.sum().item()]
@@ -315,14 +314,19 @@ class FOLCartpoleAgent():
 			expected_next_state_values = next_state_values * self.GAMMA + reward_batch
 		else:
 			expected_next_state_values = reward_batch
-
 		if self.type == "double":
 			state_batch_right = self.envs2fol(np.array(batch.state)[right_mask])
 			state_batch_left = self.envs2fol(np.array(batch.state)[left_mask])
-
-			loss_left = self.left_lnn.train_step(state_batch_left, expected_next_state_values[left_mask])
-			loss_right = self.right_lnn.train_step(state_batch_right, expected_next_state_values[right_mask])
-			return loss_left + loss_right
+			
+			running_loss = 0
+			
+			if left_mask.sum().item() > 0:
+				loss_left = self.left_lnn.train_step(state_batch_left, expected_next_state_values[left_mask], lr = self.LR)
+				running_loss += loss_left[0]
+			if right_mask.sum().item() > 0:
+				loss_right = self.right_lnn.train_step(state_batch_right, expected_next_state_values[right_mask], lr = self.LR)
+				running_loss += loss_right[0]
+			return running_loss
 		
 		else:
 			state_batch = self.envs2fol(batch.state)
