@@ -7,21 +7,21 @@ import collections
 import math
 import tqdm
 
-from CartpoleAgent import FOLCartpoleAgent
+from CartpoleAgentOld import FOLCartpoleAgent
 
 Observation = collections.namedtuple("Observation", ("Position", "Velocity", "Angle", "AngVelocity"))
 Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
 
 EPSILON_START = 1.0
 EPSILON_END = 0.1
-WARMUP_EPISODES = 500
-NUM_EPISODES = 10_000
+WARMUP_EPISODES = 250
+NUM_EPISODES = 500
 
 n_bin_args = {
     "n_pos": 10,
-    "n_vel": 10,
+    "n_vel": 5,
     "n_ang": 10,
-    "n_angvel": 10
+    "n_angvel": 5
 }
 
 limits = {
@@ -31,12 +31,11 @@ limits = {
     "AngVelocity": [-3, 3]
 }
 
-agent = FOLCartpoleAgent(n_bin_args, n_nodes = 10, limits = limits)
+agent = FOLCartpoleAgent(n_bin_args, n_nodes = 10, limits = limits, type = "double")
 env = gym.make("CartPole-v1")
 
 def train():
     epsilon = EPSILON_START
-    episode_num = 0
     episode_runs = []
     episode_losses = []
     for episode in tqdm.tqdm(range(NUM_EPISODES)):
@@ -46,16 +45,15 @@ def train():
             if np.random.random() > epsilon:
                 action = agent.sample_random_action()
             else:
-                action = agent.sample_random_action() #agent.get_action(state)
+                action = agent.get_action(state)
             next_state, reward, terminal, truncated, info = env.step(action)
-            reward = reward if not terminal else 0
+            reward = reward/10 if not terminal else 0
             agent.remember(Transition(state, action, next_state, reward, terminal))
-            #loss = agent.optimize()
-            loss = None
+            loss = agent.optimize()
             state = next_state
 
             if loss is not None:
-                total_loss += loss
+                total_loss += loss[0]
                 step += 1
             
             if terminal or truncated:
