@@ -17,14 +17,17 @@ class LNNCartpoleDual():
 			for i in range(n_nodes):
 				#Creates Predicates for buckets corresponding to values
 				predicate_list.append(Predicate(name + str(i+1))(var))
-				predicate_list.append(Predicate(name + str(-(i+1)))(var))
+				predicate_list.append(Predicate(name + str-(i+1))(var))
 			return predicate_list
 
-		def create_n_ary_and(num_nodes, preds):
+		def create_n_ary_and(num_nodes, preds, var):
 			and_list = []
-			for _ in range(num_nodes):
-				and_list.append(And(*preds["Position"], *preds["Velocity"], *preds["Angle"], *preds["AngVelocity"]))
-			return and_list
+			perturb_list = []
+			for i in range(num_nodes):
+				perturbation_node = Predicate("perturb" + str(i)(var))
+				perturb_list.append(perturbation_node)
+				and_list.append(And(*preds["Position"], *preds["Velocity"], *preds["Angle"], *preds["AngVelocity"], perturbation_node))
+			return and_list, perturb_list
 
 		def create_n_ary_or(and_list):
 			return Or(*and_list)
@@ -37,7 +40,7 @@ class LNNCartpoleDual():
 			"Angle": create_predicates(n_ang, "ang", x),
 			"AngVelocity": create_predicates(n_angvel, "angvel", x)
 		}
-		self.and_nodes = create_n_ary_and(num_nodes, self.preds)
+		self.and_nodes, self.perturb_nodes = create_n_ary_and(num_nodes, self.preds, x)
 		self.or_node = create_n_ary_or(self.and_nodes)
 
 		self.model.add_knowledge(*self.and_nodes, self.or_node)
@@ -51,9 +54,21 @@ class LNNCartpoleDual():
 		returns: dictionary that can be directly inputted into lnn for training/inference
 		'''
 		d = []
+
+		perturb_array = []
+		for i in range(processed_fol_arr):
+			for j in range(len(self.and_nodes)):
+				ep =  np.random.random()
+				perturb_array[j][str(i)] = (max(ep - 0.1, 0), min(ep + 0.1, 1))
+		
+		node_array = np.array(self.perturb_nodes, dtype = object)[:, 0]
+		d.append(dict(zip(node_array, perturb_array)))
+
 		for key in self.preds:
 			value_array = []
 			for i, fol in enumerate(processed_fol_arr):
+				print(self.perturb_nodes)
+
 				positive, value = fol[key]
 				if self.direction == "left":
 					positive = not(positive)
@@ -62,7 +77,6 @@ class LNNCartpoleDual():
 					if len(value_array) <= j:
 						value_array.append({})
 					
-
 					if j <= index:
 						if positive and j % 2 == 0:
 							value_array[j][str(i)] = Fact.TRUE
@@ -76,7 +90,7 @@ class LNNCartpoleDual():
 			predicate_array = np.array(self.preds[key], dtype = object)[:, 0]
 		
 			d.append(dict(zip(predicate_array, value_array)))
-		res = {**d[0], **d[1], **d[2], **d[3]}
+		res = {**d[0], **d[1], **d[2], **d[3], **d[4]}
 		return res
 	
 	def generate_label_dictionary(self, qval_arr, err=0.05):
@@ -507,6 +521,4 @@ class FOLCartpoleAgent():
 #     # left_q = self.left_lnn.forward(state_fol).mean(dim=1)
 #     # right_q = self.right_lnn.forward(state_fol).mean(dim=1)
 #     # return torch.argmax(torch.cat((left_q, right_q), dim = 0))
-
-
 
