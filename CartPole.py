@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 import collections
+import tqdm
 
 Observation = collections.namedtuple('Observation', ('state', 'action', 'reward', 'next_state', 'done'))
 
@@ -73,6 +74,32 @@ class DQNSolver:
         self.opt.step()        
         
         return loss.item()
+
+    def distill(self, n_bins=[4,4,4,4], lims=[[-1.2, 1.2], [-2, 2], [-0.2094395, 0.2094395], [-3, 3]]):
+        '''
+        params:
+            n_bins: array of number of bins for "Position", "Velocity", "Angle", and "AngVelocity"
+            lims: array of [lower, upper] limits for each state property
+        returns:
+            ret: 4-D array with shape n_bins, entries go from lower->upper bin, 1=right, 0=left
+        '''
+        steps = [(l[1] - l[0]) / n for l, n in zip(lims, n_bins)]
+        state_init = torch.Tensor([l[0] + 0.5*step for l, step in zip(lims, steps)]) #init to midpoints of lowest bins
+        curr_state = state_init.clone()
+        ret = torch.ones(n_bins)
+        for i in tqdm.tqdm(range(n_bins[0])):
+            for j in tqdm.tqdm(range(n_bins[1])):
+                for k in range(n_bins[2]):
+                    for h in range(n_bins[3]):
+                        ret[i,j,k,h] = self.choose_action(curr_state, epsilon=0.)
+                        curr_state[3] += steps[3] #increment by step
+                    curr_state[2] += steps[2]
+                    curr_state[3] = state_init[3] #reset state
+                curr_state[1] += steps[1]
+                curr_state[2] = state_init[2]
+            curr_state[0] += steps[0]
+            curr_state[1] = state_init[1]
+        return ret
 
 
 if __name__=="__main__":
