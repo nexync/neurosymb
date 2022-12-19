@@ -17,14 +17,14 @@ class LNNCartpoleDual():
 			for i in range(n_nodes):
 				#Creates Predicates for buckets corresponding to values
 				predicate_list.append(Predicate(name + str(i+1))(var))
-				predicate_list.append(Predicate(name + str-(i+1))(var))
+				predicate_list.append(Predicate(name + str(-(i+1)))(var))
 			return predicate_list
 
 		def create_n_ary_and(num_nodes, preds, var):
 			and_list = []
 			perturb_list = []
 			for i in range(num_nodes):
-				perturbation_node = Predicate("perturb" + str(i)(var))
+				perturbation_node = Predicate("perturb" + str(i))(var)
 				perturb_list.append(perturbation_node)
 				and_list.append(And(*preds["Position"], *preds["Velocity"], *preds["Angle"], *preds["AngVelocity"], perturbation_node))
 			return and_list, perturb_list
@@ -56,8 +56,10 @@ class LNNCartpoleDual():
 		d = []
 
 		perturb_array = []
-		for i in range(processed_fol_arr):
+		for i in range(len(processed_fol_arr)):
 			for j in range(len(self.and_nodes)):
+				if len(perturb_array) <= j:
+						perturb_array.append({})
 				ep =  np.random.random()
 				perturb_array[j][str(i)] = (max(ep - 0.1, 0), min(ep + 0.1, 1))
 		
@@ -67,7 +69,7 @@ class LNNCartpoleDual():
 		for key in self.preds:
 			value_array = []
 			for i, fol in enumerate(processed_fol_arr):
-				print(self.perturb_nodes)
+				# print(self.perturb_nodes)
 
 				positive, value = fol[key]
 				if self.direction == "left":
@@ -372,7 +374,7 @@ class FOLCartpoleAgent():
 			else:
 				return 0
 
-	def distill(self):
+	def distill_full_policy(self):
 		'''
 		params:
 			n_bins: array of number of bins for "Position", "Velocity", "Angle", and "AngVelocity"
@@ -399,6 +401,48 @@ class FOLCartpoleAgent():
 			curr_state[0] += steps[0]
 			curr_state[1] = state_init[1]
 		return ret
+
+	def distill_fol_policy(self):
+		'''
+		Note: input predicates are part of rule if their weight exceeds 1/num_inputs
+		returns:
+			lpolicy: list of strings for each And node policy (eg, 'pos1 ∧ vel-1 ∧ ang3 ∧ angvel-2') in left_lnn
+			lor_weights: parallel tensor of weights for each And node in left_lnn into Or output
+			rpolicy: same for right_lnn
+			ror_weights: same for right_lnn
+		'''
+		lnamed_params = self.left_lnn.model.named_parameters()
+		lpolicy = []
+		lor_weights = []
+		for key in lnamed_params:
+			if '∨' in key and '.weights' in key: #OR
+				lor_weights = lnamed_params[key]
+			elif '∧' in key and '.weights' in key: #AND
+				weights = lnamed_params[key]
+				used_inputs = weights > (1./len(weights))
+				input_names = key[1:-(len(').weights'))].split(' ∧ ')
+				used_inputs = [inp[:-3] for i, inp in enumerate(input_names) if used_inputs[i]]
+				rule = ''
+				if used_inputs:
+					rule = ' ∧ '.join(used_inputs)
+				lpolicy.append(rule)
+
+		rnamed_params = self.right_lnn.model.named_parameters()
+		rpolicy = []
+		ror_weights = []
+		for key in rnamed_params:
+			if '∨' in key and '.weights' in key: #OR
+				ror_weights = rnamed_params[key]
+			elif '∧' in key and '.weights' in key: #AND
+				weights = rnamed_params[key]
+				used_inputs = weights > (1./len(weights))
+				input_names = key[1:-(len(').weights'))].split(' ∧ ')
+				used_inputs = [inp[:-3] for i, inp in enumerate(input_names) if used_inputs[i]]
+				rule = ''
+				if used_inputs:
+					rule = ' ∧ '.join(used_inputs)
+				rpolicy.append(rule)
+		return lpolicy, lor_weights, rpolicy, ror_weights
 		
 # class FOLCartpoleAgent():
 #   MAXLEN = 10_000
