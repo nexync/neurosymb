@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import collections
 import math
+import tqdm
 
 Observation = collections.namedtuple("Observation", ("Position", "Velocity", "Angle", "AngVelocity"))
 Transition = collections.namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
@@ -356,6 +357,42 @@ class FOLCartpoleAgent():
 				return 1
 			else:
 				return 0
+
+	def distill(self, n_bins=[4,4,4,4], lims=[[-1.2, 1.2], [-2, 2], [-0.2094395, 0.2094395], [-3, 3]]):
+		'''
+		params:
+			n_bins: array of number of bins for "Position", "Velocity", "Angle", and "AngVelocity"
+			lims: array of [lower, upper] limits for each state property
+		returns:
+			ret: 4-D array with shape n_bins, entries go from lower->upper bin, 1=right, 0=left
+		'''
+		if isinstance(self, FOLCartpoleAgent): #this method can be directly copied for dqn agent, I think
+			n_bins = [2*self.bin_args[key] for key in self.bin_args] #includes pos and neg
+			lims = [self.limits[key] for key in self.limits]
+		steps = [(l[1] - l[0]) / n for l, n in zip(lims, n_bins)]
+		state_init = torch.Tensor([l[0] + 0.5*step for l, step in zip(lims, steps)]) #init to midpoints of lowest bins
+		curr_state = state_init.clone()
+		ret = torch.ones(n_bins)
+		for i in tqdm.tqdm(range(n_bins[0])):
+			for j in tqdm.tqdm(range(n_bins[1])):
+				for k in range(n_bins[2]):
+					for h in range(n_bins[3]):
+						if isinstance(self, FOLCartpoleAgent):
+	#                         fol = [self.env2fol(curr_state)]
+	#                         right = self.right_lnn.forward(fol)[0].mean().item()
+	#                         left = self.left_lnn.forward(fol)[0].mean().item()
+	#                         ret[i,j,k,h] = 1 if right > left else 0
+							ret[i,j,k,h] = self.get_action(curr_state)
+						else:
+							ret[i,j,k,h] = self.choose_action(curr_state)
+						curr_state[3] += steps[3] #increment by step
+					curr_state[2] += steps[2]
+					curr_state[3] = state_init[3] #reset state
+				curr_state[1] += steps[1]
+				curr_state[2] = state_init[2]
+			curr_state[0] += steps[0]
+			curr_state[1] = state_init[1]
+		return ret
 		
 # class FOLCartpoleAgent():
 #   MAXLEN = 10_000
